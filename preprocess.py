@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-df_adm = pd.read_csv('/Users/KexinHuang/Downloads/ADMISSIONS.csv')
+df_adm = pd.read_csv('/home/jiny/Resources/Research/clinicalBERT/ADMISSIONS.csv')
 df_adm.ADMITTIME = pd.to_datetime(df_adm.ADMITTIME, format = '%Y-%m-%d %H:%M:%S', errors = 'coerce')
 df_adm.DISCHTIME = pd.to_datetime(df_adm.DISCHTIME, format = '%Y-%m-%d %H:%M:%S', errors = 'coerce')
 df_adm.DEATHTIME = pd.to_datetime(df_adm.DEATHTIME, format = '%Y-%m-%d %H:%M:%S', errors = 'coerce')
@@ -28,22 +28,22 @@ df_adm = df_adm[df_adm['ADMISSION_TYPE']!='NEWBORN']
 df_adm = df_adm[df_adm.DEATHTIME.isnull()]
 df_adm['DURATION'] = (df_adm['DISCHTIME']-df_adm['ADMITTIME']).dt.total_seconds()/(24*60*60)
 
-df_notes = pd.read_csv('/Users/KexinHuang/Downloads/NOTEEVENTS.csv')
+df_notes = pd.read_csv('/home/jiny/Resources/Research/clinicalBERT/NOTEEVENTS.csv')
 df_notes = df_notes.sort_values(by=['SUBJECT_ID','HADM_ID','CHARTDATE'])
 df_adm_notes = pd.merge(df_adm[['SUBJECT_ID','HADM_ID','ADMITTIME','DISCHTIME','DAYS_NEXT_ADMIT','NEXT_ADMITTIME','ADMISSION_TYPE','DEATHTIME','OUTPUT_LABEL','DURATION']],
                         df_notes[['SUBJECT_ID','HADM_ID','CHARTDATE','TEXT','CATEGORY']], 
                         on = ['SUBJECT_ID','HADM_ID'],
                         how = 'left')
 
-df_adm_notes.ADMITTIME_C = df_adm_notes.ADMITTIME.apply(lambda x: str(x).split(' ')[0])
+df_adm_notes.ADMITTIME_C = df_adm_notes.ADMITTIME.apply(lambda x: str(x).split(' ')[0]) #extract y-m-d
 df_adm_notes['ADMITTIME_C'] = pd.to_datetime(df_adm_notes.ADMITTIME_C, format = '%Y-%m-%d', errors = 'coerce')
 df_adm_notes['CHARTDATE'] = pd.to_datetime(df_adm_notes.CHARTDATE, format = '%Y-%m-%d', errors = 'coerce')
 
 ### If Discharge Summary 
-df_discharge = df_adm_notes[df_adm_notes['CATEGORY'] == 'Discharge summary']
+df_discharge = df_adm_notes[df_adm_notes['CATEGORY'] == 'Discharge summary'] # filter Discharge summary notes (50072, 14)
 # multiple discharge summary for one admission -> after examination -> replicated summary -> replace with the last one 
-df_discharge = (df_discharge.groupby(['SUBJECT_ID','HADM_ID']).nth(-1)).reset_index()
-df_discharge=df_discharge[df_discharge['TEXT'].notnull()]
+df_discharge = (df_discharge.groupby(['SUBJECT_ID','HADM_ID']).nth(-1)).reset_index() #(43880, 14) # group by id, take the last one, and reset index
+df_discharge=df_discharge[df_discharge['TEXT'].notnull()] # check if there's any missing in text column; if yes, remove
 
 ### If Less than n days on admission notes (Early notes)
 def less_n_days_data (df_adm_notes, n):
@@ -52,8 +52,8 @@ def less_n_days_data (df_adm_notes, n):
     df_less_n=df_less_n[df_less_n['TEXT'].notnull()]
     #concatenate first
     df_concat = pd.DataFrame(df_less_n.groupby('HADM_ID')['TEXT'].apply(lambda x: "%s" % ' '.join(x))).reset_index()
-    df_concat['OUTPUT_LABEL'] = df_concat['HADM_ID'].apply(lambda x: df_less_n[df_less_n['HADM_ID']==x].OUTPUT_LABEL.values[0])
-
+    df_concat['OUTPUT_LABEL'] = df_concat['HADM_ID'].apply(lambda x: df_less_n[df_less_n['HADM_ID']==x].OUTPUT_LABEL.values[0]) #what does this line do?
+    
     return df_concat
 
 df_less_2 = less_n_days_data(df_adm_notes, 2)
@@ -76,9 +76,9 @@ def preprocessing(df_less_n):
     df_less_n['TEXT']=df_less_n['TEXT'].str.replace('\r',' ')
     df_less_n['TEXT']=df_less_n['TEXT'].apply(str.strip)
     df_less_n['TEXT']=df_less_n['TEXT'].str.lower()
-
+    
     df_less_n['TEXT']=df_less_n['TEXT'].apply(lambda x: preprocess1(x))
-
+    
     #to get 318 words chunks for readmission tasks
     from tqdm import tqdm
     df_len = len(df_less_n)
